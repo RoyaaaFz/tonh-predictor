@@ -1,0 +1,124 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ton/h Predictor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+  <div class="min-h-screen flex items-center justify-center p-6">
+    <div class="max-w-4xl w-full">
+      <div class="bg-white rounded-2xl shadow-lg p-8">
+        <h1 class="text-2xl font-semibold tracking-tight">Ton/h Range Predictor</h1>
+        <p class="text-slate-600 mt-2">Enter Fe, FeO, and Recovery to get predictions from RF and XGB models.</p>
+
+        <form id="predict-form" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Fe</label>
+            <input id="fe" type="number" step="0.0001" class="mt-1 w-full rounded-xl border border-slate-300 p-2 focus:outline-none focus:ring-2 focus:ring-slate-400" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700">FeO</label>
+            <input id="feo" type="number" step="0.0001" class="mt-1 w-full rounded-xl border border-slate-300 p-2 focus:outline-none focus:ring-2 focus:ring-slate-400" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Recovery</label>
+            <input id="recovery" type="number" step="0.000001" placeholder="0.72 or 72" class="mt-1 w-full rounded-xl border border-slate-300 p-2 focus:outline-none focus:ring-2 focus:ring-slate-400" required>
+          </div>
+          <div class="md:col-span-3 flex items-center gap-3">
+            <button type="submit" class="rounded-xl bg-slate-900 text-white px-4 py-2">Predict</button>
+            <span id="hint" class="text-sm text-slate-500"></span>
+          </div>
+        </form>
+
+        <div id="result" class="mt-8 hidden">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="rounded-2xl border p-4">
+              <h3 class="font-medium">RF</h3>
+              <p class="text-sm text-slate-500">p10</p>
+              <p id="rf-p10" class="text-xl font-semibold"></p>
+              <p class="text-sm text-slate-500 mt-2">mean</p>
+              <p id="rf-mean" class="text-xl font-semibold"></p>
+              <p class="text-sm text-slate-500 mt-2">p90</p>
+              <p id="rf-p90" class="text-xl font-semibold"></p>
+            </div>
+            <div class="rounded-2xl border p-4">
+              <h3 class="font-medium">XGB</h3>
+              <p class="text-sm text-slate-500">p10</p>
+              <p id="xgb-p10" class="text-xl font-semibold"></p>
+              <p class="text-sm text-slate-500 mt-2">mean</p>
+              <p id="xgb-mean" class="text-xl font-semibold"></p>
+              <p class="text-sm text-slate-500 mt-2">p90</p>
+              <p id="xgb-p90" class="text-xl font-semibold"></p>
+            </div>
+            <div class="rounded-2xl border p-4 bg-slate-50">
+              <h3 class="font-medium">Overall Range</h3>
+              <p class="text-sm text-slate-500">min(p10)–max(p90)</p>
+              <p id="overall" class="text-2xl font-semibold mt-1"></p>
+            </div>
+          </div>
+        </div>
+
+        <div id="error" class="mt-6 hidden rounded-xl border border-red-200 bg-red-50 p-4 text-red-700"></div>
+
+        <footer class="mt-10 text-xs text-slate-500">
+          Inputs outside the trained grid are clipped. Recovery is interpreted as 0–1 (fraction) or 0–100 (percent) and clipped to 10–90% anchors.
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  {% raw %}
+  <script>
+    async function getRanges() {
+      try {
+        const res = await fetch('/ranges');
+        const r = await res.json();
+        document.getElementById('hint').textContent = `Fe range: ${r.Fe[0].toFixed(4)}–${r.Fe[1].toFixed(4)}, FeO range: ${r.FeO[0].toFixed(4)}–${r.FeO[1].toFixed(4)}`;
+        const feMid = (r.Fe[0] + r.Fe[1]) / 2;
+        const feoMid = (r.FeO[0] + r.FeO[1]) / 2;
+        document.getElementById('fe').value = feMid.toFixed(4);
+        document.getElementById('feo').value = feoMid.toFixed(4);
+        document.getElementById('recovery').value = 0.7;
+      } catch (e) {
+        // ignore
+      }
+    }
+    getRanges();
+
+    document.getElementById('predict-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('error');
+      err.classList.add('hidden');
+      try {
+        const payload = {
+          Fe: parseFloat(document.getElementById('fe').value),
+          FeO: parseFloat(document.getElementById('feo').value),
+          Recovery: parseFloat(document.getElementById('recovery').value)
+        };
+        const res = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        document.getElementById('rf-p10').textContent = data.RF.p10.toFixed(2);
+        document.getElementById('rf-mean').textContent = data.RF.mean.toFixed(2);
+        document.getElementById('rf-p90').textContent = data.RF.p90.toFixed(2);
+        document.getElementById('xgb-p10').textContent = data.XGB.p10.toFixed(2);
+        document.getElementById('xgb-mean').textContent = data.XGB.mean.toFixed(2);
+        document.getElementById('xgb-p90').textContent = data.XGB.p90.toFixed(2);
+        document.getElementById('overall').textContent = `${data.overall_range[0].toFixed(2)} – ${data.overall_range[1].toFixed(2)}`;
+        document.getElementById('result').classList.remove('hidden');
+      } catch (ex) {
+        err.textContent = ex.message || 'Prediction failed.';
+        err.classList.remove('hidden');
+      }
+    });
+  </script>
+  {% endraw %}
+</body>
+</html>
