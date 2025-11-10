@@ -3,10 +3,6 @@
 
 Predict Ton/h from Fe, FeO, and Recovery using your trained Excel model.
 
-### Default Excel Path
-```
-C:\Users\r.feyz\Desktop\Fe_Feo_Recovery_Ton_h_Project\Model\outputs_RF_XGB_DT_STACK_Tonh_New.xlsx
-```
 
 ### Run locally
 ```bash
