@@ -170,4 +170,7 @@ async def reload_excel(file: UploadFile = File(...)):
     return {"status": "reloaded", "Fe_range": _ranges["Fe"], "FeO_range": _ranges["FeO"]}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), reload=False)
+    import os, uvicorn
+    port = int(os.getenv("PORT", "8000"))  # Railway sets PORT; fallback for local dev
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
+
