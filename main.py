@@ -116,13 +116,33 @@ def _load_from_excel_bytes(data: bytes):
     (fe_min, fe_max), (feo_min, feo_max) = _common_ranges(rf)
     return rf, xgb, {"Fe": (fe_min, fe_max), "FeO": (feo_min, feo_max)}
 
+# def _try_initial_load():
+#     env_path = os.getenv("MODEL_XLSX", r"C:\Users\8888\Desktop\Fe_Feo_Recovery_Ton_h_Project\Model\outputs_RF_XGB_DT_STACK_Tonh_New.xlsx")
+#     if not os.path.exists(env_path):
+#         raise FileNotFoundError(f"Excel model file not found at '{env_path}'.")
+#     with open(env_path, "rb") as f:
+#         data = f.read()
+#     return _load_from_excel_bytes(data)
+
 def _try_initial_load():
-    env_path = os.getenv("MODEL_XLSX", r"C:\Users\r.feyz\Desktop\Fe_Feo_Recovery_Ton_h_Project\Model\outputs_RF_XGB_DT_STACK_Tonh_New.xlsx")
-    if not os.path.exists(env_path):
-        raise FileNotFoundError(f"Excel model file not found at '{env_path}'.")
-    with open(env_path, "rb") as f:
-        data = f.read()
-    return _load_from_excel_bytes(data)
+    # Prefer env var, then local bundled files inside the container/repo
+    candidates = []
+    env_path = os.getenv("MODEL_XLSX")
+    if env_path:
+        candidates.append(env_path)
+    candidates += ["./model.xlsx", "/app/model.xlsx"]
+
+    for p in candidates:
+        if p and os.path.exists(p):
+            with open(p, "rb") as f:
+                data = f.read()
+            return _load_from_excel_bytes(data)
+
+    raise FileNotFoundError(
+        f"Excel model file not found. Tried: {candidates}. "
+        f"Set MODEL_XLSX to a valid path or include model.xlsx at the repo root."
+    )
+
 
 with _lock:
     _rf_grids, _xgb_grids, _ranges = _try_initial_load()
